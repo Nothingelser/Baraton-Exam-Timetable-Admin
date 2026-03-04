@@ -19,7 +19,7 @@ import {
   TrendingUp,
   Users,
 } from 'lucide-react';
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from '../../lib/supabaseClient.js';
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../../lib/supabaseClient.js';
 import BackupModal from '../modals/BackupModal.jsx';
 import NotificationSettings from './NotificationSettings.jsx';
 import SecuritySettingsComponent from './SecuritySettingsComponent.jsx';
@@ -29,7 +29,7 @@ function SystemSettings({ currentUser, addNotification, backupService, courses, 
   const [activeTab, setActiveTab] = useState('general');
   const [backupStatus, setBackupStatus] = useState('idle');
   const [showBackupModal, setShowBackupModal] = useState(false);
-  const [apiKey, setApiKey] = useState(SUPABASE_ANON_KEY);
+  const [apiKey, setApiKey] = useState(SUPABASE_PUBLISHABLE_KEY);
   const [showApiKey, setShowApiKey] = useState(false);
   const [language, setLanguage] = useState(() => {
     return localStorage.getItem('adminLanguage') || 'en';

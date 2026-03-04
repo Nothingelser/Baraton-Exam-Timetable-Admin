@@ -23,7 +23,7 @@ import {
   X,
 } from 'lucide-react';
 
-import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from './lib/supabaseClient';
+import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './lib/supabaseClient';
 import BackupService from './services/backupService';
 import { formatDate, parseDate } from './utils/dateUtils';
 import { getMockCourses, getMockUsers } from './utils/mockData';
@@ -253,8 +253,8 @@ function App() {
     try {
       const response = await fetch(`${SUPABASE_URL}/rest/v1/exam_courses?select=*`, {
         headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
         },
       });
 
@@ -276,8 +276,8 @@ function App() {
     try {
       const response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=*`, {
         headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
         },
       });
 
@@ -342,8 +342,8 @@ function App() {
       const response = await fetch(`${SUPABASE_URL}/rest/v1/exam_courses`, {
         method: 'POST',
         headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
           'Content-Type': 'application/json',
           Prefer: 'return=representation',
         },
@@ -370,8 +370,8 @@ function App() {
         const response = await fetch(`${SUPABASE_URL}/rest/v1/exam_courses`, {
           method: 'POST',
           headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            apikey: SUPABASE_PUBLISHABLE_KEY,
+            Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(course),
@@ -395,8 +395,8 @@ function App() {
       const response = await fetch(`${SUPABASE_URL}/rest/v1/exam_courses?id=eq.${editingCourse.id}`, {
         method: 'PATCH',
         headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
           'Content-Type': 'application/json',
           Prefer: 'return=representation',
         },
@@ -423,8 +423,8 @@ function App() {
       const response = await fetch(`${SUPABASE_URL}/rest/v1/exam_courses?id=eq.${id}`, {
         method: 'DELETE',
         headers: {
-          apikey: SUPABASE_ANON_KEY,
-          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_PUBLISHABLE_KEY,
+          Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
         },
       });
 
