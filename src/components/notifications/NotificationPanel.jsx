@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { AlertCircle, AlertTriangle, Bell, CheckCircle, X } from 'lucide-react';
 
 function NotificationPanel({
@@ -8,6 +8,41 @@ function NotificationPanel({
   markAsRead,
   clearAllNotifications,
 }) {
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  useEffect(() => {
+    if (!showNotifications) return undefined;
+
+    setCurrentTime(Date.now());
+    const timerId = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+
+    return () => clearInterval(timerId);
+  }, [showNotifications]);
+
+  const formatRelativeTime = (notification) => {
+    const sourceTime = notification.createdAt || notification.time;
+    const timestamp = typeof sourceTime === 'number' ? sourceTime : Date.parse(sourceTime);
+
+    if (!Number.isFinite(timestamp)) {
+      return notification.time || 'Just now';
+    }
+
+    const diffSeconds = Math.max(0, Math.floor((currentTime - timestamp) / 1000));
+    if (diffSeconds < 3) return 'Just now';
+    if (diffSeconds < 60) return `${diffSeconds}s`;
+
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    if (diffMinutes < 60) return `${diffMinutes}m`;
+
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) return `${diffHours}h`;
+
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d`;
+  };
+
   if (!showNotifications) return null;
 
   return (
@@ -74,7 +109,7 @@ function NotificationPanel({
                     <div className="flex-1">
                       <div className="flex justify-between items-start">
                         <h4 className="text-sm font-medium text-gray-900 dark:text-white">{notification.title}</h4>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">{notification.time}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{formatRelativeTime(notification)}</span>
                       </div>
                       <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{notification.message}</p>
                     </div>

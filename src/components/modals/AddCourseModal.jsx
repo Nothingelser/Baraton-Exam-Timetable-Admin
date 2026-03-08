@@ -410,7 +410,6 @@ function AddCourseModal({
             </button>
             <button
               type="submit"
-              onClick={handleSubmit}
               className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-lg hover:opacity-90 transition-colors font-medium"
             >
               {editingCourse ? 'Update Course' : 'Add Course'}

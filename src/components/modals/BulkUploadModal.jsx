@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import { allocateRows, getOccupiedRows } from '../../utils/rowAllocation.js';
+import ConfirmModal from './ConfirmModal.jsx';
 
 function BulkUploadModal({ showBulkModal, setShowBulkModal, handleBulkUpload, addNotification, courses }) {
   const [file, setFile] = useState(null);
@@ -18,6 +19,15 @@ function BulkUploadModal({ showBulkModal, setShowBulkModal, handleBulkUpload, ad
   const [error, setError] = useState('');
   const [previewData, setPreviewData] = useState([]);
   const [step, setStep] = useState(1); // 1: Upload, 2: Preview, 3: Confirm
+  const [confirmConfig, setConfirmConfig] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    type: 'danger',
+    onConfirm: async () => {},
+  });
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
@@ -64,7 +74,15 @@ function BulkUploadModal({ showBulkModal, setShowBulkModal, handleBulkUpload, ad
     }
   };
 
-  const handleUpload = async () => {
+  const openConfirm = ({ title, message, confirmText = 'Confirm', cancelText = 'Cancel', type = 'danger', onConfirm }) => {
+    setConfirmConfig({ isOpen: true, title, message, confirmText, cancelText, type, onConfirm });
+  };
+
+  const closeConfirm = () => {
+    setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
+  };
+
+  const performUpload = async () => {
     if (!file) {
       setError('Please select a CSV file first');
       return;
@@ -136,6 +154,16 @@ function BulkUploadModal({ showBulkModal, setShowBulkModal, handleBulkUpload, ad
       setError('Error parsing CSV file: ' + err.message);
       setUploading(false);
     }
+  };
+
+  const handleUpload = async () => {
+    openConfirm({
+      title: 'Confirm Bulk Upload',
+      message: 'Proceed with bulk upload? This will add new courses to the system.',
+      confirmText: 'Upload',
+      type: 'info',
+      onConfirm: performUpload,
+    });
   };
 
   const downloadTemplate = () => {
@@ -452,6 +480,16 @@ ENG101,English Composition,${dateExample},02:00 PM-04:00 PM,Room 202,Ms. Sarah D
           </div>
         </div>
       </div>
+      <ConfirmModal
+        isOpen={confirmConfig.isOpen}
+        onClose={closeConfirm}
+        onConfirm={confirmConfig.onConfirm}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        confirmText={confirmConfig.confirmText}
+        cancelText={confirmConfig.cancelText}
+        type={confirmConfig.type}
+      />
     </div>
   );
 }

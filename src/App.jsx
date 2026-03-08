@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useState, useTransition } from 'react';
 import {
   Bell,
   BookOpen,
@@ -25,8 +25,8 @@ import {
 
 import { supabase, SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './lib/supabaseClient';
 import BackupService from './services/backupService';
-import { formatDate, parseDate } from './utils/dateUtils';
-import { getMockCourses, getMockUsers } from './utils/mockData';
+import { formatDate, parseDate, formatDateTime } from './utils/dateUtils';
+import { useDomI18n } from './utils/domI18n';
 import { getRowAllocationSuggestions } from './utils/rowAllocation';
 
 import LandingPage from './components/landing/LandingPage';
@@ -37,9 +37,126 @@ import AddCourseModal from './components/modals/AddCourseModal';
 import BulkUploadModal from './components/modals/BulkUploadModal';
 import ExportModal from './components/modals/ExportModal';
 import BackupModal from './components/modals/BackupModal';
+import ActivityLogModal from './components/modals/ActivityLogModal';
+import ConfirmModal from './components/modals/ConfirmModal';
 import SystemSettings from './components/settings/SystemSettings';
+import ActivityLogger from './services/activityLogger';
+
+const UI_TRANSLATIONS = {
+  en: {
+    welcome: 'Welcome',
+    refresh: 'Refresh',
+    refreshing: 'Refreshing...',
+    dashboard: 'Dashboard',
+    manageCourses: 'Manage Courses',
+    users: 'Users',
+    settings: 'Settings',
+    courseManagement: 'Course Management',
+    courseManagementDesc: 'Manage all examination courses and schedules',
+    searchCourses: 'Search courses...',
+    allVenues: 'All Venues',
+    coursesFound: 'courses found',
+    loadingCourses: 'Loading courses...',
+    noCoursesFound: 'No courses found',
+    addFirstCourse: 'Add Your First Course',
+    userManagement: 'User Management',
+    userManagementDesc: 'View and manage all registered users',
+    accessRestricted: 'Access Restricted',
+    noPermission: "You don't have permission to access this section.",
+    goToDashboard: 'Go to Dashboard',
+  },
+  sw: {
+    welcome: 'Karibu',
+    refresh: 'Sasisha',
+    refreshing: 'Inasasisha...',
+    dashboard: 'Dashibodi',
+    manageCourses: 'Simamia Kozi',
+    users: 'Watumiaji',
+    settings: 'Mipangilio',
+    courseManagement: 'Usimamizi wa Kozi',
+    courseManagementDesc: 'Simamia kozi na ratiba zote za mitihani',
+    searchCourses: 'Tafuta kozi...',
+    allVenues: 'Kumbi Zote',
+    coursesFound: 'kozi zimepatikana',
+    loadingCourses: 'Inapakia kozi...',
+    noCoursesFound: 'Hakuna kozi zilizopatikana',
+    addFirstCourse: 'Ongeza Kozi ya Kwanza',
+    userManagement: 'Usimamizi wa Watumiaji',
+    userManagementDesc: 'Tazama na simamia watumiaji wote waliosajiliwa',
+    accessRestricted: 'Ufikiaji Umezuiwa',
+    noPermission: 'Huna ruhusa ya kufikia sehemu hii.',
+    goToDashboard: 'Rudi Dashibodi',
+  },
+  fr: {
+    welcome: 'Bienvenue',
+    refresh: 'Actualiser',
+    refreshing: 'Actualisation...',
+    dashboard: 'Tableau de bord',
+    manageCourses: 'Gerer les cours',
+    users: 'Utilisateurs',
+    settings: 'Parametres',
+    courseManagement: 'Gestion des cours',
+    courseManagementDesc: "Gerez tous les cours et horaires d'examen",
+    searchCourses: 'Rechercher des cours...',
+    allVenues: 'Tous les lieux',
+    coursesFound: 'cours trouves',
+    loadingCourses: 'Chargement des cours...',
+    noCoursesFound: 'Aucun cours trouve',
+    addFirstCourse: 'Ajouter votre premier cours',
+    userManagement: 'Gestion des utilisateurs',
+    userManagementDesc: 'Voir et gerer tous les utilisateurs inscrits',
+    accessRestricted: 'Acces restreint',
+    noPermission: "Vous n'avez pas la permission d'acceder a cette section.",
+    goToDashboard: 'Aller au tableau de bord',
+  },
+  es: {
+    welcome: 'Bienvenido',
+    refresh: 'Actualizar',
+    refreshing: 'Actualizando...',
+    dashboard: 'Panel',
+    manageCourses: 'Gestionar cursos',
+    users: 'Usuarios',
+    settings: 'Configuracion',
+    courseManagement: 'Gestion de cursos',
+    courseManagementDesc: 'Gestiona todos los cursos y horarios de examenes',
+    searchCourses: 'Buscar cursos...',
+    allVenues: 'Todos los lugares',
+    coursesFound: 'cursos encontrados',
+    loadingCourses: 'Cargando cursos...',
+    noCoursesFound: 'No se encontraron cursos',
+    addFirstCourse: 'Agregar tu primer curso',
+    userManagement: 'Gestion de usuarios',
+    userManagementDesc: 'Ver y gestionar todos los usuarios registrados',
+    accessRestricted: 'Acceso restringido',
+    noPermission: 'No tienes permiso para acceder a esta seccion.',
+    goToDashboard: 'Ir al panel',
+  },
+  ar: {
+    welcome: 'مرحبا',
+    refresh: 'تحديث',
+    refreshing: 'جار التحديث...',
+    dashboard: 'لوحة التحكم',
+    manageCourses: 'إدارة المقررات',
+    users: 'المستخدمون',
+    settings: 'الإعدادات',
+    courseManagement: 'إدارة المقررات',
+    courseManagementDesc: 'إدارة جميع المقررات وجداول الامتحانات',
+    searchCourses: 'ابحث عن المقررات...',
+    allVenues: 'كل القاعات',
+    coursesFound: 'مقررات موجودة',
+    loadingCourses: 'جار تحميل المقررات...',
+    noCoursesFound: 'لا توجد مقررات',
+    addFirstCourse: 'أضف أول مقرر',
+    userManagement: 'إدارة المستخدمين',
+    userManagementDesc: 'عرض وإدارة جميع المستخدمين المسجلين',
+    accessRestricted: 'الوصول مقيّد',
+    noPermission: 'ليس لديك إذن للوصول إلى هذا القسم.',
+    goToDashboard: 'العودة إلى لوحة التحكم',
+  },
+};
 
 function App() {
+  const COURSES_PER_PAGE = 25;
   const [currentView, setCurrentView] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
@@ -51,14 +168,33 @@ function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [courses, setCourses] = useState([]);
   const [users, setUsers] = useState([]);
+  const [coursesCount, setCoursesCount] = useState(0);
+  const [usersCount, setUsersCount] = useState(0);
+  const [hasLoadedCourses, setHasLoadedCourses] = useState(false);
+  const [hasLoadedUsers, setHasLoadedUsers] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterVenue, setFilterVenue] = useState('');
+  const [coursesPage, setCoursesPage] = useState(1);
   const [editingCourse, setEditingCourse] = useState(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [activeVenues, setActiveVenues] = useState([]);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [confirmConfig, setConfirmConfig] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    type: 'danger',
+    onConfirm: async () => {},
+  });
+  const [, startTransition] = useTransition();
   const [systemSettings, setSystemSettings] = useState(() => {
     return {
       systemName: localStorage.getItem('systemName') || 'Baraton Admin Panel',
@@ -106,6 +242,15 @@ function App() {
             };
             setCurrentUser(user);
             localStorage.setItem('adminUser', JSON.stringify(user));
+            
+            supabase
+              .from('profiles')
+              .update({
+                last_sign_in_at: new Date().toISOString(),
+              })
+              .eq('id', session.user.id)
+              .then(() => {})
+              .catch((updateError) => console.error('Error updating last sign-in:', updateError));
           } else {
             localStorage.removeItem('adminUser');
             setShowLogin(true);
@@ -172,14 +317,15 @@ function App() {
         addNotification('Auto-Backup', 'System auto-backup completed successfully', 'success');
       });
 
+      fetchFastCounts();
       fetchCourses();
-      fetchUsers();
 
       setNotifications([
         {
           id: 1,
           title: 'Welcome to Baraton Admin',
           message: 'System initialized successfully',
+          createdAt: new Date().toISOString(),
           time: 'Just now',
           read: false,
           type: 'success',
@@ -195,6 +341,24 @@ function App() {
     const unreadCount = notifications.filter((n) => !n.read).length;
     setUnreadNotifications(unreadCount);
   }, [notifications]);
+
+  useEffect(() => {
+    if ((currentView === 'users' || currentView === 'settings') && !hasLoadedUsers) {
+      fetchUsers();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentView, hasLoadedUsers]);
+
+  useEffect(() => {
+    // Close notifications drawer when switching between main views.
+    setShowNotifications(false);
+  }, [currentView]);
+
+  useEffect(() => {
+    startTransition(() => {
+      setSearchQuery(searchInput);
+    });
+  }, [searchInput, startTransition]);
 
   useEffect(() => {
     const handleSystemNameChange = (e) => {
@@ -231,6 +395,7 @@ function App() {
       id: Date.now(),
       title,
       message,
+      createdAt: new Date().toISOString(),
       time: 'Just now',
       read: false,
       type,
@@ -248,55 +413,80 @@ function App() {
     setNotifications([]);
   };
 
-  const fetchCourses = async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/exam_courses?select=*`, {
-        headers: {
-          apikey: SUPABASE_PUBLISHABLE_KEY,
-          Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
-        },
-      });
+  const normalizeCourseFromDb = (course) => ({
+    ...course,
+    numStudents: course.numStudents ?? course.num_students ?? '',
+  });
 
-      if (response.ok) {
-        const data = await response.json();
-        setCourses(data || getMockCourses());
-        const venues = [...new Set(data?.map((course) => course.venue).filter(Boolean) || [])];
-        setActiveVenues(venues.length > 0 ? venues : ['Main Hall', 'Room 101']);
-      }
+  const mapCourseToDbPayload = (courseInput) => {
+    const { numStudents, ...rest } = courseInput;
+    const parsedStudents =
+      numStudents === '' || numStudents === null || numStudents === undefined
+        ? null
+        : Number.isNaN(Number(numStudents))
+          ? null
+          : Number(numStudents);
+
+    return {
+      ...rest,
+      num_students: parsedStudents,
+    };
+  };
+
+  const fetchCourses = async ({ manageLoading = true } = {}) => {
+    if (manageLoading) setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('exam_courses')
+        .select('id, code, name, date, time, venue, instructor, option, num_students, rows');
+      if (error) throw error;
+
+      const normalizedCourses = (data || []).map(normalizeCourseFromDb);
+      setCourses(normalizedCourses);
+      setCoursesCount(normalizedCourses.length);
+      setHasLoadedCourses(true);
+      const venues = [...new Set(normalizedCourses.map((course) => course.venue).filter(Boolean) || [])];
+      setActiveVenues(venues);
     } catch (error) {
       console.error('Error fetching courses:', error);
-      setCourses(getMockCourses());
-      setActiveVenues(['Main Hall', 'Room 101']);
+      setCourses([]);
+      setActiveVenues([]);
+      setHasLoadedCourses(false);
     }
-    setLoading(false);
+    if (manageLoading) setLoading(false);
   };
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=*`, {
-        headers: {
-          apikey: SUPABASE_PUBLISHABLE_KEY,
-          Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const studentUsers = data.filter(
-          (user) =>
-            !user.role ||
-            user.role === 'student' ||
-            (user.role !== 'admin' &&
-              user.role !== 'lecturer' &&
-              user.role !== 'examiner' &&
-              user.role !== 'coordinator')
-        );
-        setUsers(studentUsers || getMockUsers());
-      }
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, role, student_id, staff_id, created_at, last_sign_in_at');
+      if (error) throw error;
+      const userRows = data || [];
+      setUsers(userRows);
+      setUsersCount(userRows.length);
+      setHasLoadedUsers(true);
     } catch (error) {
       console.error('Error fetching users:', error);
-      setUsers(getMockUsers());
+      setUsers([]);
+      setHasLoadedUsers(false);
+    }
+  };
+
+  const fetchFastCounts = async () => {
+    try {
+      const [{ count: courseCount, error: coursesCountError }, { count: userCount, error: usersCountError }] = await Promise.all([
+        supabase.from('exam_courses').select('id', { count: 'exact', head: true }),
+        supabase.from('profiles').select('id', { count: 'exact', head: true }),
+      ]);
+
+      if (coursesCountError) throw coursesCountError;
+      if (usersCountError) throw usersCountError;
+
+      setCoursesCount(courseCount || 0);
+      setUsersCount(userCount || 0);
+    } catch (error) {
+      console.error('Error fetching fast counts:', error);
     }
   };
 
@@ -304,10 +494,14 @@ function App() {
     console.log('Refresh clicked by user:', currentUser?.role);
 
     try {
+      setIsRefreshing(true);
       setLoading(true);
 
-      await fetchCourses();
-      await fetchUsers();
+      const refreshTasks = [fetchFastCounts(), fetchCourses({ manageLoading: false })];
+      if (currentView === 'users' || currentView === 'settings' || hasLoadedUsers) {
+        refreshTasks.push(fetchUsers());
+      }
+      await Promise.all(refreshTasks);
 
       addNotification('Data Refreshed', 'All data has been refreshed successfully', 'success');
 
@@ -317,11 +511,28 @@ function App() {
 
       addNotification('Refresh Failed', 'Failed to refresh data. Please try again.', 'error');
     } finally {
+      setIsRefreshing(false);
       setLoading(false);
     }
   };
 
-  const handleAddCourse = async () => {
+  const openConfirm = ({ title, message, confirmText = 'Confirm', cancelText = 'Cancel', type = 'danger', onConfirm }) => {
+    setConfirmConfig({
+      isOpen: true,
+      title,
+      message,
+      confirmText,
+      cancelText,
+      type,
+      onConfirm,
+    });
+  };
+
+  const closeConfirm = () => {
+    setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
+  };
+
+  const performAddCourse = async () => {
     try {
       let rowsToUse = formData.rows;
       if (!rowsToUse && formData.date && formData.time && formData.venue && formData.numStudents) {
@@ -338,6 +549,7 @@ function App() {
         ...formData,
         rows: rowsToUse,
       };
+      const payload = mapCourseToDbPayload(courseData);
 
       const response = await fetch(`${SUPABASE_URL}/rest/v1/exam_courses`, {
         method: 'POST',
@@ -347,7 +559,7 @@ function App() {
           'Content-Type': 'application/json',
           Prefer: 'return=representation',
         },
-        body: JSON.stringify(courseData),
+        body: JSON.stringify(payload),
       });
 
       if (response.ok) {
@@ -355,6 +567,13 @@ function App() {
         resetForm();
         fetchCourses();
         addNotification('Course Added', `${formData.code} added successfully`, 'success');
+        await ActivityLogger.logActivity(currentUser?.id, 'Course Added', {
+          id: null,
+          code: courseData.code,
+          name: courseData.name,
+          date: courseData.date,
+          time: courseData.time,
+        });
       } else {
         addNotification('Error', 'Failed to add course', 'error');
       }
@@ -364,9 +583,20 @@ function App() {
     }
   };
 
+  const handleAddCourse = async () => {
+    openConfirm({
+      title: 'Confirm Course Addition',
+      message: `Add course ${formData.code || 'Untitled'} to the system?`,
+      confirmText: 'Add Course',
+      type: 'info',
+      onConfirm: performAddCourse,
+    });
+  };
+
   const handleBulkUpload = async (coursesData) => {
     try {
       for (const course of coursesData) {
+        const payload = mapCourseToDbPayload(course);
         const response = await fetch(`${SUPABASE_URL}/rest/v1/exam_courses`, {
           method: 'POST',
           headers: {
@@ -374,7 +604,7 @@ function App() {
             Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(course),
+          body: JSON.stringify(payload),
         });
 
         if (!response.ok) {
@@ -390,8 +620,13 @@ function App() {
     }
   };
 
-  const handleUpdateCourse = async () => {
+  const performUpdateCourse = async () => {
     try {
+      if (!editingCourse?.id) {
+        addNotification('Update Failed', 'No course selected for update', 'error');
+        return;
+      }
+
       const response = await fetch(`${SUPABASE_URL}/rest/v1/exam_courses?id=eq.${editingCourse.id}`, {
         method: 'PATCH',
         headers: {
@@ -400,26 +635,45 @@ function App() {
           'Content-Type': 'application/json',
           Prefer: 'return=representation',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(mapCourseToDbPayload(formData)),
       });
 
-      if (response.ok) {
-        setEditingCourse(null);
-        setShowAddModal(false);
-        resetForm();
-        fetchCourses();
-        addNotification('Course Updated', `${formData.code} updated successfully`, 'success');
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(errorBody || `Update failed with status ${response.status}`);
       }
+
+      await fetchCourses();
+      setEditingCourse(null);
+      setShowAddModal(false);
+      resetForm();
+      addNotification('Course Updated', `${formData.code} updated successfully`, 'success');
+      await ActivityLogger.logActivity(currentUser?.id, 'Course Updated', {
+        id: editingCourse?.id || null,
+        code: formData.code,
+        name: formData.name,
+        date: formData.date,
+        time: formData.time,
+      });
     } catch (error) {
       console.error('Error updating course:', error);
-      addNotification('Error', 'Failed to update course', 'error');
+      addNotification('Update Failed', `Failed to update course: ${error.message}`, 'error');
     }
   };
 
-  const handleDeleteCourse = async (id) => {
-    if (!confirm('Are you sure you want to delete this course?')) return;
+  const handleUpdateCourse = async () => {
+    openConfirm({
+      title: 'Confirm Course Update',
+      message: `Save updates to course ${formData.code || 'this course'}?`,
+      confirmText: 'Update Course',
+      type: 'info',
+      onConfirm: performUpdateCourse,
+    });
+  };
 
+  const performDeleteCourse = async (id) => {
     try {
+      const deletedCourse = courses.find((course) => course.id === id);
       const response = await fetch(`${SUPABASE_URL}/rest/v1/exam_courses?id=eq.${id}`, {
         method: 'DELETE',
         headers: {
@@ -431,11 +685,29 @@ function App() {
       if (response.ok) {
         fetchCourses();
         addNotification('Course Deleted', 'Course deleted successfully', 'success');
+        await ActivityLogger.logActivity(currentUser?.id, 'Course Deleted', {
+          id,
+          code: deletedCourse?.code || null,
+          name: deletedCourse?.name || null,
+          date: deletedCourse?.date || null,
+          time: deletedCourse?.time || null,
+        });
       }
     } catch (error) {
       console.error('Error deleting course:', error);
       addNotification('Error', 'Failed to delete course', 'error');
     }
+  };
+
+  const handleDeleteCourse = async (id) => {
+    const course = courses.find((c) => c.id === id);
+    openConfirm({
+      title: 'Confirm Course Deletion',
+      message: `Delete ${course?.code || 'this course'}${course?.name ? ` - ${course.name}` : ''}? This action cannot be undone.`,
+      confirmText: 'Delete',
+      type: 'danger',
+      onConfirm: () => performDeleteCourse(id),
+    });
   };
 
   const handleExport = (exportInfo) => {
@@ -477,38 +749,87 @@ function App() {
     setShowAddModal(true);
   };
 
+  const performLogout = async () => {
+    await supabase.auth.signOut();
+    localStorage.removeItem('adminUser');
+    setCurrentUser(null);
+    setShowLogin(true);
+    addNotification('Logged Out', 'You have been logged out successfully', 'info');
+  };
+
   const handleLogout = async () => {
-    if (confirm('Are you sure you want to logout?')) {
-      await supabase.auth.signOut();
-      localStorage.removeItem('adminUser');
-      setCurrentUser(null);
-      setShowLogin(true);
-      addNotification('Logged Out', 'You have been logged out successfully', 'info');
+    openConfirm({
+      title: 'Confirm Logout',
+      message: 'Are you sure you want to logout?',
+      confirmText: 'Logout',
+      type: 'danger',
+      onConfirm: performLogout,
+    });
+  };
+
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+
+  const navigateToView = (viewId) => {
+    startTransition(() => {
+      setCurrentView(viewId);
+      setMobileMenuOpen(false);
+    });
+  };
+
+  const filteredCourses = useMemo(() => {
+    const normalizedQuery = deferredSearchQuery.toLowerCase().trim();
+
+    return courses.filter((course) => {
+      const matchesSearch =
+        !normalizedQuery ||
+        (course.name?.toLowerCase() || '').includes(normalizedQuery) ||
+        (course.code?.toLowerCase() || '').includes(normalizedQuery);
+
+      const matchesVenue = !filterVenue || course.venue === filterVenue;
+
+      return matchesSearch && matchesVenue;
+    });
+  }, [courses, deferredSearchQuery, filterVenue]);
+
+  const totalCoursePages = useMemo(
+    () => Math.max(1, Math.ceil(filteredCourses.length / COURSES_PER_PAGE)),
+    [filteredCourses.length, COURSES_PER_PAGE]
+  );
+
+  const paginatedCourses = useMemo(() => {
+    const startIndex = (coursesPage - 1) * COURSES_PER_PAGE;
+    return filteredCourses.slice(startIndex, startIndex + COURSES_PER_PAGE);
+  }, [filteredCourses, coursesPage, COURSES_PER_PAGE]);
+
+  useEffect(() => {
+    setCoursesPage(1);
+  }, [deferredSearchQuery, filterVenue, currentView]);
+
+  useEffect(() => {
+    if (coursesPage > totalCoursePages) {
+      setCoursesPage(totalCoursePages);
     }
-  };
+  }, [coursesPage, totalCoursePages]);
 
-  const filteredCourses = courses.filter((course) => {
-    const matchesSearch =
-      (course.name?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-      (course.code?.toLowerCase() || '').includes(searchQuery.toLowerCase());
+  const stats = useMemo(() => {
+    const now = new Date();
+    const today = now.toDateString();
 
-    const matchesVenue = !filterVenue || course.venue === filterVenue;
-
-    return matchesSearch && matchesVenue;
-  });
-
-  const stats = {
-    totalCourses: courses.length,
-    totalUsers: users.length,
-    upcomingExams: courses.filter((c) => c.date && parseDate(c.date) > new Date()).length,
-    todayExams: courses.filter((c) => c.date && parseDate(c.date).toDateString() === new Date().toDateString()).length,
-    venues: activeVenues.length,
-  };
+    return {
+      totalCourses: hasLoadedCourses ? courses.length : coursesCount,
+      totalUsers: hasLoadedUsers ? users.length : usersCount,
+      upcomingExams: courses.filter((c) => c.date && parseDate(c.date) > now).length,
+      todayExams: courses.filter((c) => c.date && parseDate(c.date).toDateString() === today).length,
+      venues: activeVenues.length,
+    };
+  }, [courses, users.length, activeVenues.length, hasLoadedCourses, hasLoadedUsers, coursesCount, usersCount]);
 
   const isAdmin = currentUser?.role === 'admin';
   const isLecturer = currentUser?.role === 'lecturer';
   const canManageUsers = isAdmin;
   const canManageSystemSettings = isAdmin;
+  const t = (key, fallback) => UI_TRANSLATIONS[systemSettings.language]?.[key] || fallback;
+  useDomI18n(systemSettings.language);
 
   if (showSignup) {
     return <LecturerSignupPage setShowSignup={setShowSignup} setCurrentUser={setCurrentUser} />;
@@ -556,7 +877,7 @@ function App() {
                 </div>
                 <div className="ml-3">
                   <h1 className="text-xl font-bold text-gray-900 dark:text-white">{systemSettings.systemName}</h1>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Welcome, {currentUser?.name || 'Admin'}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('welcome', 'Welcome')}, {currentUser?.name || 'Admin'}</p>
                 </div>
               </div>
             </div>
@@ -565,10 +886,10 @@ function App() {
               <button
                 onClick={handleRefresh}
                 className="hidden sm:flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={loading}
+                disabled={isRefreshing}
               >
-                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                {loading ? 'Refreshing...' : 'Refresh'}
+                <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+                {isRefreshing ? 'Refreshing...' : 'Refresh'}
               </button>
 
               <button
@@ -619,18 +940,16 @@ function App() {
           <div className="p-4 space-y-2">
             {[
               { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, allowed: true },
-              { id: 'courses', label: 'Manage Courses', icon: BookOpen, allowed: true },
-              { id: 'users', label: 'Students', icon: Users, allowed: canManageUsers },
-              { id: 'settings', label: 'Settings', icon: Settings, allowed: canManageSystemSettings },
+              { id: 'courses', label: t('manageCourses', 'Manage Courses'), icon: BookOpen, allowed: true },
+              { id: 'users', label: t('users', 'Users'), icon: Users, allowed: canManageUsers },
+              { id: 'settings', label: t('settings', 'Settings'), icon: Settings, allowed: canManageSystemSettings },
             ]
+              .map((item) => ({ ...item, label: item.id === 'dashboard' ? t('dashboard', 'Dashboard') : item.label }))
               .filter((item) => item.allowed)
               .map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => {
-                    setCurrentView(item.id);
-                    setMobileMenuOpen(false);
-                  }}
+                  onClick={() => navigateToView(item.id)}
                   className={`w-full flex items-center px-4 py-3 rounded-lg ${
                     currentView === item.id
                       ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-l-4 border-blue-600'
@@ -641,7 +960,7 @@ function App() {
                   {item.label}
                   {item.id === 'users' && canManageUsers && (
                     <span className="ml-auto bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300 text-xs px-2 py-1 rounded-full">
-                      {users.length}
+                      {stats.totalUsers}
                     </span>
                   )}
                 </button>
@@ -737,7 +1056,7 @@ function App() {
                   { title: 'Total Courses', value: stats.totalCourses, icon: BookOpen, color: 'blue' },
                   { title: 'Upcoming Exams', value: stats.upcomingExams, icon: Clock, color: 'green' },
                   { title: "Today's Exams", value: stats.todayExams, icon: Calendar, color: 'orange' },
-                  { title: 'Students', value: stats.totalUsers, icon: Users, color: 'purple' },
+                  { title: 'Users', value: stats.totalUsers, icon: Users, color: 'purple' },
                 ].map((stat, index) => (
                   <div
                     key={index}
@@ -780,7 +1099,7 @@ function App() {
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Recent Courses</h2>
                   <button
-                    onClick={() => setCurrentView('courses')}
+                    onClick={() => navigateToView('courses')}
                     className="text-sm text-blue-600 dark:text-blue-500 hover:text-blue-800 dark:hover:text-blue-400 font-medium flex items-center"
                   >
                     View all <ChevronRight className="w-4 h-4 ml-1" />
@@ -841,8 +1160,8 @@ function App() {
             <div className="space-y-6">
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div>
-                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Course Management</h1>
-                  <p className="text-gray-600 dark:text-gray-400 mt-1">Manage all examination courses and schedules</p>
+                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('courseManagement', 'Course Management')}</h1>
+                  <p className="text-gray-600 dark:text-gray-400 mt-1">{t('courseManagementDesc', 'Manage all examination courses and schedules')}</p>
                 </div>
                 <div className="flex flex-wrap gap-3">
                   {isAdmin && (
@@ -877,9 +1196,9 @@ function App() {
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-600" />
                     <input
                       type="text"
-                      placeholder="Search courses..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder={t('searchCourses', 'Search courses...')}
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
                       className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-900 dark:text-white"
                     />
                   </div>
@@ -890,7 +1209,7 @@ function App() {
                       onChange={(e) => setFilterVenue(e.target.value)}
                       className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-900 dark:text-white"
                     >
-                      <option value="">All Venues</option>
+                      <option value="">{t('allVenues', 'All Venues')}</option>
                       {activeVenues.map((venue, idx) => (
                         <option key={idx} value={venue}>
                           {venue}
@@ -900,7 +1219,7 @@ function App() {
                   </div>
                   <div className="text-sm text-gray-500 dark:text-gray-400 flex items-center">
                     <span className="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300 px-3 py-1 rounded-full">
-                      {filteredCourses.length} courses found
+                      {filteredCourses.length} {t('coursesFound', 'courses found')}
                     </span>
                   </div>
                 </div>
@@ -910,106 +1229,132 @@ function App() {
                 {loading ? (
                   <div className="text-center py-12">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-500 dark:text-gray-400">Loading courses...</p>
+                    <p className="text-gray-500 dark:text-gray-400">{t('loadingCourses', 'Loading courses...')}</p>
                   </div>
                 ) : filteredCourses.length === 0 ? (
                   <div className="text-center py-12">
                     <BookOpen className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                    <p className="text-gray-500 dark:text-gray-400">No courses found</p>
+                    <p className="text-gray-500 dark:text-gray-400">{t('noCoursesFound', 'No courses found')}</p>
                     <button onClick={() => setShowAddModal(true)} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                      Add Your First Course
+                      {t('addFirstCourse', 'Add Your First Course')}
                     </button>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gray-50 dark:bg-gray-700">
-                        <tr>
-                          <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                            Code
-                          </th>
-                          <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                            Course Details
-                          </th>
-                          <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                            Schedule
-                          </th>
-                          <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                            Students/Rows
-                          </th>
-                          <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                            Actions
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                        {filteredCourses.map((course) => (
-                          <tr key={course.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                            <td className="py-4 px-6">
-                              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300">
-                                {course.code}
-                              </span>
-                            </td>
-                            <td className="py-4 px-6">
-                              <p className="font-medium text-gray-900 dark:text-white">{course.name}</p>
-                              {course.option && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{course.option}</p>}
-                            </td>
-                            <td className="py-4 px-6">
-                              <div>
-                                <p className="text-sm text-gray-900 dark:text-white">{formatDate(parseDate(course.date))}</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">{course.time}</p>
-                                {course.venue && (
-                                  <div className="flex items-center mt-1">
-                                    <MapPin className="w-3 h-3 text-gray-400 mr-1" />
-                                    <span className="text-xs text-gray-600 dark:text-gray-400">{course.venue}</span>
-                                  </div>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-4 px-6">
-                              <div>
-                                <p className="text-sm font-medium text-gray-900 dark:text-white">Students: {course.numStudents || '0'}</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Rows: {course.rows || 'Not configured'}</p>
-                                {course.rows && (
-                                  <div className="mt-1">
-                                    <span
-                                      className={`inline-block px-2 py-0.5 text-xs rounded ${
-                                        course.rows.split(',').some((r) => parseInt(r) % 2 === 1)
-                                          ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300'
-                                          : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300'
-                                      }`}
-                                    >
-                                      {course.rows.split(',').some((r) => parseInt(r) % 2 === 1) ? 'Odd rows' : 'Even rows'}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-4 px-6">
-                              <div className="flex items-center space-x-2">
-                                <button
-                                  onClick={() => openEditModal(course)}
-                                  className="p-2 text-blue-600 dark:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
-                                  title="Edit"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </button>
-                                {isAdmin && (
-                                  <button
-                                    onClick={() => handleDeleteCourse(course.id)}
-                                    className="p-2 text-red-600 dark:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
-                                    title="Delete"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                )}
-                              </div>
-                            </td>
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-gray-50 dark:bg-gray-700">
+                          <tr>
+                            <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                              Code
+                            </th>
+                            <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                              Course Details
+                            </th>
+                            <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                              Schedule
+                            </th>
+                            <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                              Students/Rows
+                            </th>
+                            <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                              Actions
+                            </th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                          {paginatedCourses.map((course) => (
+                            <tr key={course.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                              <td className="py-4 px-6">
+                                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300">
+                                  {course.code}
+                                </span>
+                              </td>
+                              <td className="py-4 px-6">
+                                <p className="font-medium text-gray-900 dark:text-white">{course.name}</p>
+                                {course.option && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{course.option}</p>}
+                              </td>
+                              <td className="py-4 px-6">
+                                <div>
+                                  <p className="text-sm text-gray-900 dark:text-white">{course.date ? formatDate(course.date) : 'No date'}</p>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">{course.time}</p>
+                                  {course.venue && (
+                                    <div className="flex items-center mt-1">
+                                      <MapPin className="w-3 h-3 text-gray-400 mr-1" />
+                                      <span className="text-xs text-gray-600 dark:text-gray-400">{course.venue}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-4 px-6">
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900 dark:text-white">Students: {course.numStudents || '0'}</p>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Rows: {course.rows || 'Not configured'}</p>
+                                  {course.rows && (
+                                    <div className="mt-1">
+                                      <span
+                                        className={`inline-block px-2 py-0.5 text-xs rounded ${
+                                          course.rows.split(',').some((r) => parseInt(r) % 2 === 1)
+                                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300'
+                                            : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300'
+                                        }`}
+                                      >
+                                        {course.rows.split(',').some((r) => parseInt(r) % 2 === 1) ? 'Odd rows' : 'Even rows'}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-4 px-6">
+                                <div className="flex items-center space-x-2">
+                                  <button
+                                    onClick={() => openEditModal(course)}
+                                    className="p-2 text-blue-600 dark:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg"
+                                    title="Edit"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+                                  {isAdmin && (
+                                    <button
+                                      onClick={() => handleDeleteCourse(course.id)}
+                                      className="p-2 text-red-600 dark:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                                      title="Delete"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Showing {(coursesPage - 1) * COURSES_PER_PAGE + 1}-{Math.min(coursesPage * COURSES_PER_PAGE, filteredCourses.length)} of {filteredCourses.length}
+                      </p>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => setCoursesPage((prev) => Math.max(1, prev - 1))}
+                          disabled={coursesPage === 1}
+                          className="px-3 py-1 text-xs border border-gray-300 dark:border-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                          Previous
+                        </button>
+                        <span className="text-xs text-gray-600 dark:text-gray-400">
+                          Page {coursesPage} / {totalCoursePages}
+                        </span>
+                        <button
+                          onClick={() => setCoursesPage((prev) => Math.min(totalCoursePages, prev + 1))}
+                          disabled={coursesPage >= totalCoursePages}
+                          className="px-3 py-1 text-xs border border-gray-300 dark:border-gray-700 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
             </div>
@@ -1018,15 +1363,15 @@ function App() {
           {currentView === 'users' && canManageUsers && (
             <div className="space-y-6">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">User Management</h1>
-                <p className="text-gray-600 dark:text-gray-400 mt-1">View and manage all registered users</p>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('userManagement', 'User Management')}</h1>
+                <p className="text-gray-600 dark:text-gray-400 mt-1">{t('userManagementDesc', 'View and manage all registered users')}</p>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="bg-gradient-to-br from-purple-600 to-indigo-700 rounded-xl p-6 text-white">
                   <div className="flex items-center justify-between mb-6">
                     <Users className="w-8 h-8 opacity-80" />
-                    <span className="text-3xl font-bold">{users.length}</span>
+                    <span className="text-3xl font-bold">{stats.totalUsers}</span>
                   </div>
                   <h3 className="text-lg font-semibold mb-2">Total Users</h3>
                   <p className="text-purple-200 text-sm">All registered users in the system</p>
@@ -1083,6 +1428,12 @@ function App() {
                         <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                           Joined Date
                         </th>
+                        <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                          Last Login
+                        </th>
+                        <th className="text-left py-4 px-6 text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                          Activity
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -1112,7 +1463,7 @@ function App() {
                                 {user.staff_id}
                               </span>
                             ) : (
-                              <span className="text-gray-400">—</span>
+                              <span className="text-gray-400">-</span>
                             )}
                           </td>
                           <td className="py-4 px-6">
@@ -1134,8 +1485,24 @@ function App() {
                           </td>
                           <td className="py-4 px-6">
                             <p className="text-sm text-gray-900 dark:text-white">
-                              {user.created_at ? formatDate(new Date(user.created_at)) : 'N/A'}
+                              {user.created_at ? formatDate(user.created_at) : 'Unknown'}
                             </p>
+                          </td>
+                          <td className="py-4 px-6">
+                            <p className="text-sm text-gray-900 dark:text-white">
+                              {user.last_sign_in_at ? formatDateTime(user.last_sign_in_at) : 'Never'}
+                            </p>
+                          </td>
+                          <td className="py-4 px-6">
+                            <button
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setShowActivityModal(true);
+                              }}
+                              className="text-sm text-blue-600 dark:text-blue-500 hover:underline"
+                            >
+                              View Logs
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -1159,10 +1526,10 @@ function App() {
           {((currentView === 'users' && !canManageUsers) || (currentView === 'settings' && !canManageSystemSettings)) && (
             <div className="text-center py-12">
               <Shield className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Access Restricted</h2>
-              <p className="text-gray-600 dark:text-gray-400">You don't have permission to access this section.</p>
-              <button onClick={() => setCurrentView('dashboard')} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                Go to Dashboard
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{t('accessRestricted', 'Access Restricted')}</h2>
+              <p className="text-gray-600 dark:text-gray-400">{t('noPermission', "You don't have permission to access this section.")}</p>
+              <button onClick={() => navigateToView('dashboard')} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                {t('goToDashboard', 'Go to Dashboard')}
               </button>
             </div>
           )}
@@ -1215,6 +1582,27 @@ function App() {
           systemSettings={systemSettings}
         />
       )}
+
+      {showActivityModal && selectedUser && (
+        <ActivityLogModal
+          user={selectedUser}
+          onClose={() => {
+            setShowActivityModal(false);
+            setSelectedUser(null);
+          }}
+        />
+      )}
+
+      <ConfirmModal
+        isOpen={confirmConfig.isOpen}
+        onClose={closeConfirm}
+        onConfirm={confirmConfig.onConfirm}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        confirmText={confirmConfig.confirmText}
+        cancelText={confirmConfig.cancelText}
+        type={confirmConfig.type}
+      />
     </div>
   );
 }

@@ -10,6 +10,7 @@ import {
   UploadCloud,
   X,
 } from 'lucide-react';
+import ConfirmModal from './ConfirmModal';
 
 function BackupModal({
   showBackupModal,
@@ -30,6 +31,15 @@ function BackupModal({
   });
   const [autoBackupInterval, setAutoBackupInterval] = useState(() => {
     return localStorage.getItem('autoBackupInterval') || '24';
+  });
+  const [confirmConfig, setConfirmConfig] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    type: 'danger',
+    onConfirm: async () => {},
   });
 
   useEffect(() => {
@@ -78,11 +88,15 @@ function BackupModal({
     }
   };
 
-  const handleRestoreBackup = async (backupId = 'latest') => {
-    if (!window.confirm('Are you sure you want to restore this backup? Current data may be overwritten.')) {
-      return;
-    }
+  const openConfirm = ({ title, message, confirmText = 'Confirm', cancelText = 'Cancel', type = 'danger', onConfirm }) => {
+    setConfirmConfig({ isOpen: true, title, message, confirmText, cancelText, type, onConfirm });
+  };
 
+  const closeConfirm = () => {
+    setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
+  };
+
+  const performRestoreBackup = async (backupId = 'latest') => {
     setBackupStatus('restoring');
 
     try {
@@ -106,11 +120,17 @@ function BackupModal({
     }
   };
 
-  const handleDeleteBackup = async (backupId) => {
-    if (!window.confirm('Are you sure you want to delete this backup?')) {
-      return;
-    }
+  const handleRestoreBackup = async (backupId = 'latest') => {
+    openConfirm({
+      title: 'Confirm Restore',
+      message: 'Are you sure you want to restore this backup? Current data may be overwritten.',
+      confirmText: 'Restore',
+      type: 'danger',
+      onConfirm: () => performRestoreBackup(backupId),
+    });
+  };
 
+  const performDeleteBackup = async (backupId) => {
     const result = backupService.deleteBackup(backupId);
 
     if (result.success) {
@@ -119,6 +139,16 @@ function BackupModal({
     } else {
       addNotification('Delete Failed', `Failed to delete backup: ${result.error}`, 'error');
     }
+  };
+
+  const handleDeleteBackup = async (backupId) => {
+    openConfirm({
+      title: 'Confirm Delete',
+      message: 'Are you sure you want to delete this backup? This action cannot be undone.',
+      confirmText: 'Delete',
+      type: 'danger',
+      onConfirm: () => performDeleteBackup(backupId),
+    });
   };
 
   const handleExportBackup = (backupId) => {
@@ -164,11 +194,7 @@ function BackupModal({
     }
   };
 
-  const handleClearAllBackups = () => {
-    if (!window.confirm('Are you sure you want to clear all backups? This action cannot be undone.')) {
-      return;
-    }
-
+  const performClearAllBackups = () => {
     const result = backupService.clearAllBackups();
 
     if (result.success) {
@@ -177,6 +203,16 @@ function BackupModal({
     } else {
       addNotification('Clear Failed', `Failed to clear backups: ${result.error}`, 'error');
     }
+  };
+
+  const handleClearAllBackups = () => {
+    openConfirm({
+      title: 'Confirm Clear All',
+      message: 'Are you sure you want to clear all backups? This action cannot be undone.',
+      confirmText: 'Clear All',
+      type: 'danger',
+      onConfirm: performClearAllBackups,
+    });
   };
 
   const handleAutoBackupToggle = (enabled) => {
@@ -529,6 +565,16 @@ function BackupModal({
           </div>
         </div>
       </div>
+      <ConfirmModal
+        isOpen={confirmConfig.isOpen}
+        onClose={closeConfirm}
+        onConfirm={confirmConfig.onConfirm}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        confirmText={confirmConfig.confirmText}
+        cancelText={confirmConfig.cancelText}
+        type={confirmConfig.type}
+      />
     </div>
   );
 }

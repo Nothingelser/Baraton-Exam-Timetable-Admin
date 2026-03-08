@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../../lib/supabaseClient.js';
 import BackupModal from '../modals/BackupModal.jsx';
+import ConfirmModal from '../modals/ConfirmModal.jsx';
 import NotificationSettings from './NotificationSettings.jsx';
 import SecuritySettingsComponent from './SecuritySettingsComponent.jsx';
 import ThemeSettings from './ThemeSettings.jsx';
@@ -66,6 +67,15 @@ function SystemSettings({ currentUser, addNotification, backupService, courses, 
   });
   const [apiLogs, setApiLogs] = useState([]);
   const [backupHistory, setBackupHistory] = useState([]);
+  const [confirmConfig, setConfirmConfig] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    type: 'danger',
+    onConfirm: async () => {},
+  });
 
   const tabs = [
     { id: 'general', label: 'General', icon: Settings },
@@ -164,9 +174,14 @@ function SystemSettings({ currentUser, addNotification, backupService, courses, 
   const handleGeneralSettingsChange = (key, value) => {
     switch (key) {
       case 'language':
-        setLanguage(value);
-        if (addNotification) {
-          addNotification('Language Updated', `Interface language changed to ${getLanguageName(value)}`, 'success');
+        if (value !== language) {
+          openConfirm({
+            title: 'Confirm Language Change',
+            message: `Change interface language from ${getLanguageName(language)} to ${getLanguageName(value)}?`,
+            confirmText: 'Change',
+            type: 'info',
+            onConfirm: () => applyLanguageChange(value),
+          });
         }
         break;
       case 'systemName':
@@ -241,10 +256,16 @@ function SystemSettings({ currentUser, addNotification, backupService, courses, 
   };
 
   const handleRestoreBackup = async () => {
-    if (!window.confirm('Are you sure you want to restore from the latest backup? Current data may be overwritten.')) {
-      return;
-    }
+    openConfirm({
+      title: 'Confirm Restore',
+      message: 'Are you sure you want to restore from the latest backup? Current data may be overwritten.',
+      confirmText: 'Restore',
+      type: 'danger',
+      onConfirm: performRestoreBackup,
+    });
+  };
 
+  const performRestoreBackup = async () => {
     setBackupStatus('restoring');
 
     try {
@@ -264,6 +285,21 @@ function SystemSettings({ currentUser, addNotification, backupService, courses, 
       setBackupStatus('idle');
       addNotification('Restore Failed', `Failed to restore backup: ${error.message}`, 'error');
     }
+  };
+
+  const applyLanguageChange = (value) => {
+    setLanguage(value);
+    if (addNotification) {
+      addNotification('Language Updated', `Interface language changed to ${getLanguageName(value)}`, 'success');
+    }
+  };
+
+  const openConfirm = ({ title, message, confirmText = 'Confirm', cancelText = 'Cancel', type = 'danger', onConfirm }) => {
+    setConfirmConfig({ isOpen: true, title, message, confirmText, cancelText, type, onConfirm });
+  };
+
+  const closeConfirm = () => {
+    setConfirmConfig((prev) => ({ ...prev, isOpen: false }));
   };
 
   const handleRegenerateApiKey = () => {
@@ -1068,6 +1104,17 @@ function SystemSettings({ currentUser, addNotification, backupService, courses, 
           }}
         />
       )}
+
+      <ConfirmModal
+        isOpen={confirmConfig.isOpen}
+        onClose={closeConfirm}
+        onConfirm={confirmConfig.onConfirm}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        confirmText={confirmConfig.confirmText}
+        cancelText={confirmConfig.cancelText}
+        type={confirmConfig.type}
+      />
     </div>
   );
 }

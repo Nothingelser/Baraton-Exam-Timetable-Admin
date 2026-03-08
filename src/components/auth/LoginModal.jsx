@@ -64,6 +64,16 @@ function LoginModal({ showLogin, setShowLogin, setCurrentUser, setShowSignup }) 
         return;
       }
 
+      // Keep profiles.last_sign_in_at in sync for immediate UI accuracy.
+      const { error: lastSignInError } = await supabase
+        .from('profiles')
+        .update({ last_sign_in_at: new Date().toISOString() })
+        .eq('id', data.user.id);
+
+      if (lastSignInError) {
+        console.error('Error updating last_sign_in_at on login:', lastSignInError);
+      }
+
       const user = {
         id: profileData.id,
         name: profileData.full_name || data.user.email?.split('@')[0] || 'User',

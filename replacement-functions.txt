@@ -1,0 +1,64 @@
+  const handleUpdateCourse = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Update Course',
+      message: 'Are you sure you want to update this course?',
+      onConfirm: async () => {
+        try {
+          const response = await fetch(`${SUPABASE_URL}/rest/v1/exam_courses?id=eq.${editingCourse.id}`, {
+            method: 'PATCH',
+            headers: {
+              apikey: SUPABASE_PUBLISHABLE_KEY,
+              Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+              'Content-Type': 'application/json',
+              Prefer: 'return=representation',
+            },
+            body: JSON.stringify(formData),
+          });
+          if (response.ok) {
+            setEditingCourse(null);
+            setShowAddModal(false);
+            resetForm();
+            fetchCourses();
+            await ActivityLogger.logActivity(currentUser.id, 'Updated Course', { code: formData.code, name: formData.name });
+            addNotification('Course Updated', `${formData.code} updated successfully`, 'success');
+          } else {
+            addNotification('Error', 'Failed to update course', 'error');
+          }
+        } catch (error) {
+          console.error('Error updating course:', error);
+          addNotification('Error', 'Failed to update course', 'error');
+        }
+      },
+      type: 'warning',
+    });
+  };
+
+  const handleDeleteCourse = (id) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Course',
+      message: 'Are you sure you want to delete this course? This action cannot be undone.',
+      onConfirm: async () => {
+        try {
+          const response = await fetch(`${SUPABASE_URL}/rest/v1/exam_courses?id=eq.${id}`, {
+            method: 'DELETE',
+            headers: {
+              apikey: SUPABASE_PUBLISHABLE_KEY,
+              Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+            },
+          });
+          if (response.ok) {
+            fetchCourses();
+            await ActivityLogger.logActivity(currentUser.id, 'Deleted Course', { id });
+            addNotification('Course Deleted', 'Course deleted successfully', 'success');
+          } else {
+            addNotification('Error', 'Failed to delete course', 'error');
+          }
+        } catch (error) {
+          console.error('Error deleting course:', error);
+          addNotification('Error', 'Failed to delete course', 'error');
+        }
+      },
+    });
+  };
